@@ -154,16 +154,12 @@ mvPipeCommand :: Lens' MailView (E.Editor T.Text Name)
 mvPipeCommand = lens _mvPipeCommand (\mv hs -> mv { _mvPipeCommand = hs })
 
 data Compose = Compose
-    { _cMail :: B.ByteString
-    , _cFrom :: E.Editor T.Text Name
-    , _cTo :: E.Editor T.Text Name
-    , _cSubject :: E.Editor T.Text Name
-    , _cTemp :: T.Text
-    , _cAttachments :: L.List Name MIMEMessage
-    }
-
-cMail :: Lens' Compose B.ByteString
-cMail = lens _cMail (\c x -> c { _cMail = x })
+  { _cFrom :: E.Editor T.Text Name
+  , _cTo :: E.Editor T.Text Name
+  , _cSubject :: E.Editor T.Text Name
+  , _cTemp :: T.Text
+  , _cAttachments :: L.List Name MIMEMessage
+  }
 
 cFrom :: Lens' Compose (E.Editor T.Text Name)
 cFrom = lens _cFrom (\c x -> c { _cFrom = x })

@@ -422,7 +422,7 @@ focusComposeFrom
     -> AppState
     -> f AppState
 focusComposeFrom _ _ s =
-    if nullOf (asCompose . cMail) s
+    if nullOf (asCompose . cAttachments) s
         then pure $
              over
                  (asViews . vsFocusedView)
@@ -997,14 +997,12 @@ sanitizeMail = over (attachments . headers . contentDisposition . filename) take
 
 initialCompose :: [Mailbox] -> Compose
 initialCompose mailboxes =
-  let mail = B.empty
-  in Compose
-        mail
-        (E.editorText ComposeFrom (Just 1) (AddressText.renderMailboxes mailboxes))
-        (E.editorText ComposeTo (Just 1) "")
-        (E.editorText ComposeSubject (Just 1) "")
-        T.empty
-        (L.list ComposeListOfAttachments mempty 1)
+  Compose
+    (E.editorText ComposeFrom (Just 1) (AddressText.renderMailboxes mailboxes))
+    (E.editorText ComposeTo (Just 1) "")
+    (E.editorText ComposeSubject (Just 1) "")
+    T.empty
+    (L.list ComposeListOfAttachments mempty 1)
 
 -- | Serialise the WireEntity and write it to a temporary file. If no WireEntity
 -- exists (e.g. composing a new mail) just use the empty file. When the
