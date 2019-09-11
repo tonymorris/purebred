@@ -26,6 +26,8 @@ module Types
   , Tag
   ) where
 
+import Prelude hiding (Word)
+
 import GHC.Generics (Generic)
 
 import Brick.AttrMap (AttrMap)
@@ -66,6 +68,7 @@ data Name =
     | ListOfMails
     | ListOfThreads
     | ScrollingMailView
+    | ScrollingMailViewFindWordEditor
     | ComposeHeaders
     | ComposeFrom
     | ComposeTo
@@ -148,14 +151,75 @@ miThreadTagsEditor = lens _miThreadTagsEditor (\m v -> m { _miThreadTagsEditor =
 miNewMail :: Lens' MailIndex Int
 miNewMail = lens _miNewMail (\m v -> m { _miNewMail = v})
 
+-- | Type representing a specific entity from an e-mail for display.
+--
+newtype MailBody =
+  MailBody [Paragraph]
+  deriving (Show, Eq)
+
+mbParagraph :: Traversal' MailBody Paragraph
+mbParagraph f (MailBody xs) = fmap (\xs' -> MailBody xs') (traverse f xs)
+
+matchCount :: MailBody -> Int
+matchCount =
+  foldrOf
+    (mbParagraph . pLine)
+    (\l amount -> view (lMatches . to length) l + amount)
+    0
+
+-- | A paragraph in the mail body
+--
+newtype Paragraph =
+  Paragraph [Line]
+  deriving (Show, Eq)
+
+pLine :: Traversal' Paragraph Line
+pLine f (Paragraph xs) = fmap (\xs' -> Paragraph xs') (traverse f xs)
+
+-- | A match of a substring in the current line of text
+--
+data Match =
+  Match Int -- ^ offset
+        Int -- ^ length
+        Int -- ^ line number
+  deriving (Show, Eq)
+
+-- | A scroll step indicated by the line number and the match
+--
+type ScrollStep = (Int, Match)
+
+-- | A line of text with arbitrary length and possible matching sub
+-- strings
+--
+data Line =
+  Line [Match]
+       Int -- ^ line number
+       T.Text
+  deriving (Show, Eq)
+
+hasMatches :: Line -> Bool
+hasMatches = notNullOf (lMatches . traverse)
+
+lMatches :: Lens' Line [Match]
+lMatches f (Line xs n t) = fmap (\xs' -> Line xs' n t) (f xs)
+
+lText :: Lens' Line T.Text
+lText f (Line xs n t) = fmap (\t' -> Line xs n t') (f t)
+
+lNumber :: Lens' Line Int
+lNumber f (Line xs n t) = fmap (\n' -> Line xs n' t) (f n)
+
 data HeadersState = ShowAll | Filtered
 
 data MailView = MailView
     { _mvMail :: Maybe MIMEMessage
+    , _mvBody:: MailBody
     , _mvHeadersState :: HeadersState
     , _mvAttachments :: L.List Name WireEntity
     , _mvOpenCommand:: E.Editor T.Text Name
     , _mvPipeCommand :: E.Editor T.Text Name
+    , _mvFindWordEditor :: E.Editor T.Text Name
+    , _mvSearchResult :: Maybe (Brick.FocusRing ScrollStep)
     }
 
 mvMail :: Lens' MailView (Maybe MIMEMessage)
@@ -172,6 +236,15 @@ mvOpenCommand = lens _mvOpenCommand (\mv hs -> mv { _mvOpenCommand = hs })
 
 mvPipeCommand :: Lens' MailView (E.Editor T.Text Name)
 mvPipeCommand = lens _mvPipeCommand (\mv hs -> mv { _mvPipeCommand = hs })
+
+mvFindWordEditor :: Lens' MailView (E.Editor T.Text Name)
+mvFindWordEditor = lens _mvFindWordEditor (\mv hs -> mv { _mvFindWordEditor = hs })
+
+mvSearchResult :: Lens' MailView (Maybe (Brick.FocusRing ScrollStep))
+mvSearchResult = lens _mvSearchResult (\mv hs -> mv { _mvSearchResult = hs })
+
+mvBody :: Lens' MailView MailBody
+mvBody = lens _mvBody (\mv hs -> mv { _mvBody = hs })
 
 data ConfirmDraft
   = Keep
@@ -399,6 +472,7 @@ data MailViewSettings = MailViewSettings
     , _mvMailListOfAttachmentsKeybindings :: [Keybinding 'ViewMail 'MailListOfAttachments]
     , _mvOpenWithKeybindings :: [Keybinding 'ViewMail 'MailAttachmentOpenWithEditor]
     , _mvPipeToKeybindings :: [Keybinding 'ViewMail 'MailAttachmentPipeToEditor]
+    , _mvFindWordEditorKeybindings :: [Keybinding 'ViewMail 'ScrollingMailViewFindWordEditor]
     , _mvMailcap :: [(ContentType -> Bool, MailcapHandler)]
     }
     deriving (Generic, NFData)
@@ -426,6 +500,9 @@ mvOpenWithKeybindings = lens _mvOpenWithKeybindings (\s x -> s { _mvOpenWithKeyb
 
 mvPipeToKeybindings :: Lens' MailViewSettings [Keybinding 'ViewMail 'MailAttachmentPipeToEditor]
 mvPipeToKeybindings = lens _mvPipeToKeybindings (\s x -> s { _mvPipeToKeybindings = x })
+
+mvFindWordEditorKeybindings :: Lens' MailViewSettings [Keybinding 'ViewMail 'ScrollingMailViewFindWordEditor]
+mvFindWordEditorKeybindings = lens _mvFindWordEditorKeybindings (\s x -> s { _mvFindWordEditorKeybindings = x })
 
 mvMailcap :: Lens' MailViewSettings [(ContentType -> Bool, MailcapHandler)]
 mvMailcap = lens _mvMailcap (\s x -> s { _mvMailcap = x })

@@ -21,13 +21,15 @@ module UI.Status.Main where
 
 import Brick.BChan (BChan, writeBChan)
 import Brick.Types (Widget)
-import Brick.Widgets.Core (hBox, txt, str, withAttr, (<+>), strWrap, padLeftRight)
+import Brick.Widgets.Core
+  (hBox, txt, str, withAttr, (<+>), strWrap, padLeftRight,
+  emptyWidget)
 import Brick.Widgets.Center (hCenter)
 import qualified Brick.Widgets.List  as L
 import qualified Brick.Widgets.Edit  as E
 import Control.Monad.Except (runExceptT)
 import Control.Monad (void)
-import Control.Lens (view, views)
+import Control.Lens (view, views, to, has, _Just)
 import Control.Concurrent (forkIO, threadDelay)
 import Data.Text (Text)
 import Data.Text.Zipper (cursorPosition)
@@ -76,6 +78,7 @@ statusbar s =
                 ManageThreadTagsEditor -> renderStatusbar (view (asMailIndex . miThreadTagsEditor) s) s
                 MailAttachmentOpenWithEditor -> renderStatusbar (view (asMailView . mvOpenCommand) s) s
                 MailAttachmentPipeToEditor -> renderStatusbar (view (asMailView . mvPipeCommand) s) s
+                ScrollingMailViewFindWordEditor -> renderStatusbar (view (asMailView . mvFindWordEditor) s) s
                 ListOfThreads -> renderStatusbar (view (asMailIndex . miThreads) s) s
                 ListOfMails -> renderStatusbar (view (asMailIndex . miMails) s) s
                 ScrollingMailView -> renderStatusbar (view (asMailIndex . miMails) s) s
@@ -101,12 +104,20 @@ renderStatusbar w s = withAttr statusbarAttr $ hBox
   [ str "Purebred: "
   , renderContext s w
   , renderNewMailIndicator s
+  , renderMatches s
   , fillLine
   , txt (
       titleize (focusedViewName s) <> "-"
       <> titleize (focusedViewWidget s) <> " "
       )
   ]
+
+renderMatches :: AppState -> Widget n
+renderMatches s =
+  let showCount = view (asMailView . mvBody . to (show . matchCount)) s
+  in if has (asMailView . mvSearchResult . _Just) s
+     then str (showCount <> " matches")
+     else emptyWidget
 
 renderNewMailIndicator :: AppState -> Widget n
 renderNewMailIndicator s =

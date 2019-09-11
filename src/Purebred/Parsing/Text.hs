@@ -14,11 +14,21 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 --
-module Purebred.Parsing.Text where
+{-# LANGUAGE OverloadedStrings #-}
+module Purebred.Parsing.Text
+  ( parseMailbody
+  , niceEndOfInput
+  ) where
 
 import Control.Applicative ((<|>))
 import qualified Data.Attoparsec.Internal.Types as AT
-import Data.Attoparsec.Text (Parser, endOfInput, peekChar')
+import Data.Attoparsec.Text
+import Text.Wrap (defaultWrapSettings, wrapTextToLines)
+import qualified Data.Text as T
+import Prelude hiding (Word)
+import Control.Lens
+
+import Types
 
 niceEndOfInput :: Parser ()
 niceEndOfInput = endOfInput <|> p
@@ -31,3 +41,27 @@ niceEndOfInput = endOfInput <|> p
 -- | Get the current position of the parser
 offset :: AT.Parser i Int
 offset = AT.Parser $ \t pos more _lose suc -> suc t pos more (AT.fromPos pos)
+
+parseMailbody :: T.Text -> MailBody
+parseMailbody =
+  either
+    (\e -> MailBody [Paragraph [Line [] 0 (T.pack e)]])
+    (MailBody . setLineNumbers) . parseOnly (paragraphs <* niceEndOfInput)
+
+endOfParagraph :: Parser ()
+endOfParagraph = endOfLine *> endOfLine
+
+paragraph :: Parser Paragraph
+paragraph = Paragraph . makeLines . T.pack <$> manyTill anyChar endOfParagraph
+
+paragraphs :: Parser [Paragraph]
+paragraphs = do
+  paras <- many' paragraph
+  rest <- takeText
+  pure $ paras <> [Paragraph $ makeLines rest]
+
+makeLines :: T.Text -> [Line]
+makeLines = fmap (Line [] 0) . wrapTextToLines defaultWrapSettings 82
+
+setLineNumbers :: [Paragraph] -> [Paragraph]
+setLineNumbers = iover (indexing (traversed . pLine)) (set lNumber)
