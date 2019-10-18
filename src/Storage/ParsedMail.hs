@@ -48,6 +48,8 @@ import Control.Lens
 import Data.Text.Lens (packed)
 import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Catch (MonadMask)
+import Data.Foldable (toList)
 import qualified Data.ByteString as B
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text as T
@@ -61,6 +63,8 @@ import Storage.Notmuch (mailFilepath)
 import Types
 import Purebred.Types.IFC (sanitiseText)
 import Purebred.Parsing.Text (parseMailbody)
+import Purebred.System.Process
+  (runEntityCommand', tmpfileResource, toProcessConfigWithTempfile)
 
 {- $synopsis
 
@@ -128,13 +132,34 @@ removeMatchingWords =
   set (mbParagraph . pLine . filtered hasMatches . lMatches) []
 
 bodyToDisplay ::
-     CharsetLookup
+     (MonadMask m, MonadError Error m, MonadIO m)
+  => AppState
+  -> CharsetLookup
   -> ContentType
   -> MIMEMessage
-  -> MailBody
-bodyToDisplay charsets prefCT msg =
-  let ent = chooseEntity prefCT msg
-   in maybe (MailBody []) (parseMailbody . entityToText charsets) ent
+  -> m (MIMEMessage, MailBody)
+bodyToDisplay s charsets prefCT msg =
+  case chooseEntity prefCT msg of
+    Nothing ->
+      throwError
+        (GenericError $ "Unable to find preferred entity with: " <> show prefCT)
+    Just entity ->
+      let output =
+            maybe
+              (pure $ parseMailbody "Internal Viewer" $ entityToText charsets entity)
+              (\handler ->
+                 parseMailbody (showHandler handler) <$>
+                 entityPiped handler entity)
+              (findAutoview s entity)
+          showHandler = view (mhMakeProcess . mpCommand . to (T.pack . toList))
+       in (msg, ) <$> output
+
+
+findAutoview :: AppState -> WireEntity -> Maybe MailcapHandler
+findAutoview s msg =
+  let match ct = firstOf (asConfig . confMailView . mvAutoview . traversed . filtered (`fst` ct) . _2) s
+  in match =<< preview (headers . contentType) msg
+
 
 -- | Pick a preferred entity to be displayed in the UI.
 --
@@ -171,6 +196,26 @@ entityToText charsets msg = sanitiseText . either err (view body) $
     err e =
       "ERROR: " <> view (to show . packed) e <> ". Showing raw body.\n\n"
       <> decodeLenient (view body msg)
+
+entityPiped ::
+     (MonadMask m, MonadError Error m, MonadIO m)
+  => MailcapHandler
+  -> WireEntity
+  -> m T.Text
+entityPiped handler msg =
+  entityToBytes msg >>= mkConfig handler >>= runEntityCommand'
+
+mkConfig ::
+     (MonadError Error m, MonadIO m)
+  => MailcapHandler
+  -> B.ByteString
+  -> m (EntityCommand m FilePath)
+mkConfig cmd =
+  pure .
+  EntityCommand
+    (const . pure)
+    (tmpfileResource (view mhKeepTemp cmd))
+    (\_ fp -> toProcessConfigWithTempfile (view mhMakeProcess cmd) fp)
 
 quoteText :: T.Text -> T.Text
 quoteText = T.unlines . fmap ("> " <>) . T.lines

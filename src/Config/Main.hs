@@ -105,6 +105,7 @@ solarizedDark =
         , (textMatchHighlightAttr, V.white `on` V.green)
         , (currentTextMatchHighlightAttr, V.green `on` V.white)
         , (defaultAttr, V.defAttr)
+        , (mailbodySourceAttr, fg V.blue)
         ]
 
 -- * Attributes
@@ -177,11 +178,19 @@ helpTitleAttr = helpAttr <> "title"
 helpKeybindingAttr :: A.AttrName
 helpKeybindingAttr = helpAttr <> "keybinding"
 
+
 textMatchHighlightAttr :: A.AttrName
 textMatchHighlightAttr = "match"
 
 currentTextMatchHighlightAttr :: A.AttrName
 currentTextMatchHighlightAttr = textMatchHighlightAttr <> "current"
+
+mailbodyAttr :: A.AttrName
+mailbodyAttr = "mailbody"
+
+mailbodySourceAttr :: A.AttrName
+mailbodySourceAttr = mailbodyAttr <> "source"
+
 
 -- * Purebred's Configuration
 -- The default configuration used in Purebred.
@@ -210,6 +219,10 @@ defaultConfig =
       , _mvOpenWithKeybindings = openWithKeybindings
       , _mvPipeToKeybindings = pipeToKeybindings
       , _mvFindWordEditorKeybindings = findWordEditorKeybindings
+      , _mvAutoview =
+          [ ( matchContentType "text" (Just "html")
+          , MailcapHandler (Shell $ fromList "elinks -dump -force-html") False)
+          ]
       , _mvMailcap =
           [ ( matchContentType "text" (Just "html")
             , MailcapHandler (Shell (fromList "elinks -force-html")) False)

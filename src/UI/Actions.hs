@@ -1201,18 +1201,27 @@ applyTagOps ops mails s =
   in runExceptT (Notmuch.messageTagModify dbpath ops mails)
 
 updateStateWithParsedMail :: AppState -> IO AppState
-updateStateWithParsedMail s = selectedItemHelper (asMailIndex . miListOfMails) s $ \m ->
-        either
-            (\e -> setError e . over (asViews . vsFocusedView) (Brick.focusSetCurrent Threads))
-            (\pmail -> set (asMailView . mvMail) (Just pmail)
-                       . set (asMailView . mvBody) (bodyToDisplay (view (asConfig . confCharsets) s)  preferredContentType pmail)
-                       . over (asViews . vsFocusedView) (Brick.focusSetCurrent ViewMail)
-                       . set (asMailView . mvAttachments) (setEntities pmail)
-            )
-            <$> runExceptT (parseMail m (view (asConfig . confNotmuch . nmDatabase) s))
+updateStateWithParsedMail s =
+  selectedItemHelper (asMailIndex . miListOfMails) s $ \m ->
+    either
+      (\e ->
+         setError e .
+         over (asViews . vsFocusedView) (Brick.focusSetCurrent Threads))
+      (\(pmail, mbody) s' ->
+         s' &
+         set (asMailView . mvMail) (Just pmail) .
+         set (asMailView . mvBody) mbody .
+         over (asViews . vsFocusedView) (Brick.focusSetCurrent ViewMail) .
+         set (asMailView . mvAttachments) (setEntities pmail)) <$>
+    runExceptT
+      (parseMail m (view (asConfig . confNotmuch . nmDatabase) s) >>=
+       bodyToDisplay s charsets preferredContentType)
   where
-    setEntities m = L.list MailListOfAttachments (view vector $ toListOf entities m) 0
-    preferredContentType = view (asConfig . confMailView . mvPreferredContentType) s
+    charsets = view (asConfig . confCharsets) s
+    setEntities m =
+      L.list MailListOfAttachments (view vector $ toListOf entities m) 0
+    preferredContentType =
+      view (asConfig . confMailView . mvPreferredContentType) s
 
 -- | Tag the currently selected mail as /read/. This is reflected as a
 -- visual change in the UI.

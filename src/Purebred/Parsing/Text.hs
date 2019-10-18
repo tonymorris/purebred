@@ -42,11 +42,11 @@ niceEndOfInput = endOfInput <|> p
 offset :: AT.Parser i Int
 offset = AT.Parser $ \t pos more _lose suc -> suc t pos more (AT.fromPos pos)
 
-parseMailbody :: T.Text -> MailBody
-parseMailbody =
+parseMailbody :: Source -> T.Text -> MailBody
+parseMailbody s =
   either
-    (\e -> MailBody [Paragraph [Line [] 0 (T.pack e)]])
-    (MailBody . setLineNumbers) . parseOnly (paragraphs <* niceEndOfInput)
+    (\e -> MailBody s [Paragraph [Line [] 0 (T.pack e)]])
+    (MailBody s . setLineNumbers) . parseOnly (paragraphs <* niceEndOfInput)
 
 endOfParagraph :: Parser ()
 endOfParagraph = endOfLine *> endOfLine

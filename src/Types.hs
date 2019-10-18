@@ -151,14 +151,22 @@ miThreadTagsEditor = lens _miThreadTagsEditor (\m v -> m { _miThreadTagsEditor =
 miNewMail :: Lens' MailIndex Int
 miNewMail = lens _miNewMail (\m v -> m { _miNewMail = v})
 
+-- | A loose annotation what produced the rendered output of the
+-- entity
+--
+type Source = T.Text
+
 -- | Type representing a specific entity from an e-mail for display.
 --
-newtype MailBody =
-  MailBody [Paragraph]
+data MailBody =
+  MailBody Source [Paragraph]
   deriving (Show, Eq)
 
 mbParagraph :: Traversal' MailBody Paragraph
-mbParagraph f (MailBody xs) = fmap (\xs' -> MailBody xs') (traverse f xs)
+mbParagraph f (MailBody s xs) = fmap (\xs' -> MailBody s xs') (traverse f xs)
+
+mbSource :: Lens' MailBody Source
+mbSource f (MailBody d xs) = fmap (\d' -> MailBody d' xs) (f d)
 
 matchCount :: MailBody -> Int
 matchCount =
@@ -473,6 +481,7 @@ data MailViewSettings = MailViewSettings
     , _mvOpenWithKeybindings :: [Keybinding 'ViewMail 'MailAttachmentOpenWithEditor]
     , _mvPipeToKeybindings :: [Keybinding 'ViewMail 'MailAttachmentPipeToEditor]
     , _mvFindWordEditorKeybindings :: [Keybinding 'ViewMail 'ScrollingMailViewFindWordEditor]
+    , _mvAutoview :: [(ContentType -> Bool, MailcapHandler)]
     , _mvMailcap :: [(ContentType -> Bool, MailcapHandler)]
     }
     deriving (Generic, NFData)
@@ -503,6 +512,9 @@ mvPipeToKeybindings = lens _mvPipeToKeybindings (\s x -> s { _mvPipeToKeybinding
 
 mvFindWordEditorKeybindings :: Lens' MailViewSettings [Keybinding 'ViewMail 'ScrollingMailViewFindWordEditor]
 mvFindWordEditorKeybindings = lens _mvFindWordEditorKeybindings (\s x -> s { _mvFindWordEditorKeybindings = x })
+
+mvAutoview :: Lens' MailViewSettings [(ContentType -> Bool, MailcapHandler)]
+mvAutoview = lens _mvAutoview (\s x -> s { _mvAutoview = x })
 
 mvMailcap :: Lens' MailViewSettings [(ContentType -> Bool, MailcapHandler)]
 mvMailcap = lens _mvMailcap (\s x -> s { _mvMailcap = x })
@@ -771,6 +783,10 @@ data MakeProcess
   | Process (NonEmpty Char)
             [String]
   deriving (Generic, NFData)
+
+mpCommand :: Lens' MakeProcess (NonEmpty Char)
+mpCommand f (Shell x) = fmap (\x' -> Shell x') (f x)
+mpCommand f (Process x args) = fmap (\x' -> Process x' args) (f x)
 
 data MailcapHandler = MailcapHandler
   { _mhMakeProcess :: MakeProcess
