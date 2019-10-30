@@ -163,7 +163,10 @@ data MailBody =
   deriving (Show, Eq)
 
 mbParagraph :: Traversal' MailBody Paragraph
-mbParagraph f (MailBody s xs) = fmap (\xs' -> MailBody s xs') (traverse f xs)
+mbParagraph = mbParagraphs . traverse
+
+mbParagraphs :: Lens' MailBody [Paragraph]
+mbParagraphs f (MailBody s xs) = fmap (\xs' -> MailBody s xs') (f xs)
 
 mbSource :: Lens' MailBody Source
 mbSource f (MailBody d xs) = fmap (\d' -> MailBody d' xs) (f d)
